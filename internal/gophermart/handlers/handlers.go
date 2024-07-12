@@ -124,6 +124,5 @@ func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) 
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	rw.Header().Set("Content-Type", "text/plain")
-	fmt.Fprint(rw, token)
+	rw.Header().Set("Authorization", "Bearer: "+token)
 }
