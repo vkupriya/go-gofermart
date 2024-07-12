@@ -96,7 +96,13 @@ func (gr *GophermartHandler) UserAdd(rw http.ResponseWriter, r *http.Request) {
 		rw.WriteHeader(http.StatusConflict)
 		return
 	}
-	rw.WriteHeader(http.StatusOK)
+	rw.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(rw)
+	if err := enc.Encode(&user); err != nil {
+		logger.Sugar().Debug("error encoding JSON response", zap.Error(err))
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
 
 func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) {
