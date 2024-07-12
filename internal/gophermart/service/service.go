@@ -76,6 +76,6 @@ func (g *GophermartService) SvcUserLogin(uname string, passwd string) (string, e
 		return "", fmt.Errorf("failed to create JWT token for user %s", uname)
 	}
 
-	logger.Sugar().Debugf("user %s logged in successfully", uname)
+	logger.Sugar().Debugf("user %s has been authorized", uname)
 	return tokenStr, nil
 }

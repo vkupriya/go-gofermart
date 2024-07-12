@@ -96,13 +96,15 @@ func (gr *GophermartHandler) UserAdd(rw http.ResponseWriter, r *http.Request) {
 		rw.WriteHeader(http.StatusConflict)
 		return
 	}
-	rw.Header().Set("Content-Type", "application/json")
-	enc := json.NewEncoder(rw)
-	if err := enc.Encode(&user); err != nil {
-		logger.Sugar().Debug("error encoding JSON response", zap.Error(err))
-		rw.WriteHeader(http.StatusInternalServerError)
+
+	token, err := gr.service.SvcUserLogin(user.Login, user.Password)
+	if err != nil || token == "" {
+		fmt.Println(err)
+		logger.Sugar().Errorf("user %s failed to authenticate", user.Login)
+		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+	rw.Header().Set("Authorization", "Bearer: "+token)
 }
 
 func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) {
