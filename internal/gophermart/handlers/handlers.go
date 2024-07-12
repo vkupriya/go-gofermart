@@ -91,7 +91,7 @@ func (gr *GophermartHandler) UserAdd(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := gr.service.SvcUserAdd(user.User, user.Password); err != nil {
+	if err := gr.service.SvcUserAdd(user.Login, user.Password); err != nil {
 		logger.Sugar().Error("login already taken")
 		rw.WriteHeader(http.StatusConflict)
 		return
@@ -117,10 +117,10 @@ func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	token, err := gr.service.SvcUserLogin(user.User, user.Password)
+	token, err := gr.service.SvcUserLogin(user.Login, user.Password)
 	if err != nil || token == "" {
 		fmt.Println(err)
-		logger.Sugar().Errorf("user %s failed to authenticate", user.User)
+		logger.Sugar().Errorf("user %s failed to authenticate", user.Login)
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}

@@ -38,22 +38,22 @@ func (m *MemStorage) OrdersGet(user string) (models.Orders, error) {
 
 func (m *MemStorage) UserAdd(user string, passwd string) error {
 	for _, u := range m.users {
-		if u.User == user {
+		if u.Login == user {
 			return fmt.Errorf("user '%s' already exists", user)
 		}
 	}
 	m.users = append(m.users, models.User{
-		User:     user,
+		Login:    user,
 		Password: passwd,
 	})
 
 	return nil
 }
 
-func (m *MemStorage) UserGet(userid string) (models.User, error) {
+func (m *MemStorage) UserGet(user string) (models.User, error) {
 
 	for _, u := range m.users {
-		if u.User == userid {
+		if u.Login == user {
 			return u, nil
 		}
 	}

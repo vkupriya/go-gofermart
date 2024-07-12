@@ -22,7 +22,7 @@ type Order struct {
 type Users []User
 
 type User struct {
-	User     string `json:"user"`
+	Login    string `json:"login"`
 	Password string `json:"password"`
 }
 
