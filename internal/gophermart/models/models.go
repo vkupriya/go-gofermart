@@ -1,7 +1,7 @@
 package models
 
 import (
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/golang-jwt/jwt/v5"
 	"go.uber.org/zap"
 )
 
@@ -31,6 +31,6 @@ type Token struct {
 }
 
 type Claims struct {
-	Username string
+	User string
 	jwt.RegisteredClaims
 }

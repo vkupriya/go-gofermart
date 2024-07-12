@@ -46,10 +46,19 @@ func NewGophermartRouter(gr *GophermartHandler) chi.Router {
 
 func (gr *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
 	logger := gr.config.Logger
+	v := r.Context().Value(mw.CtxKey{})
+	ctxUname, ok := v.(string)
+	if !ok {
+		logger.Sugar().Error("failed to get user from context value")
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	uid := chi.URLParam(r, "userID")
+	fmt.Println("ctxUser: ", ctxUname)
 
-	resp, err := gr.service.SvcOrdersGet(uid)
+	user := chi.URLParam(r, "userID")
+
+	resp, err := gr.service.SvcOrdersGet(user)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -109,15 +118,6 @@ func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) 
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	t := models.Token{
-		Token: token,
-	}
-	rw.Header().Set("Content-Type", "application/json")
-
-	enc := json.NewEncoder(rw)
-	if err := enc.Encode(t); err != nil {
-		logger.Sugar().Debug("error encoding JSON response", zap.Error(err))
-		rw.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	rw.Header().Set("Content-Type", "text/plain")
+	fmt.Fprint(rw, token)
 }

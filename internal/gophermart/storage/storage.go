@@ -18,32 +18,32 @@ func NewMemStorage(c *models.Config) (*MemStorage, error) {
 	}, nil
 }
 
-func (m *MemStorage) OrdersAdd(userid string, orderid string) error {
+func (m *MemStorage) OrdersAdd(user string, orderid string) error {
 	m.orders = append(m.orders, models.Order{
-		UserID:  userid,
+		UserID:  user,
 		OrderID: orderid,
 	})
 	return nil
 }
 
-func (m *MemStorage) OrdersGet(userid string) (models.Orders, error) {
+func (m *MemStorage) OrdersGet(user string) (models.Orders, error) {
 	var orders models.Orders
 	for _, o := range m.orders {
-		if o.UserID == userid {
+		if o.UserID == user {
 			orders = append(orders, o)
 		}
 	}
 	return orders, nil
 }
 
-func (m *MemStorage) UserAdd(userid string, passwd string) error {
+func (m *MemStorage) UserAdd(user string, passwd string) error {
 	for _, u := range m.users {
-		if u.User == userid {
-			return fmt.Errorf("user '%s' already exists", userid)
+		if u.User == user {
+			return fmt.Errorf("user '%s' already exists", user)
 		}
 	}
 	m.users = append(m.users, models.User{
-		User:     userid,
+		User:     user,
 		Password: passwd,
 	})
 

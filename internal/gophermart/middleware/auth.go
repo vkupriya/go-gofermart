@@ -1,12 +1,14 @@
 package middleware
 
 import (
-	"fmt"
+	"context"
 	"net/http"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/vkupriya/go-gophermart/internal/gophermart/helpers"
 	"github.com/vkupriya/go-gophermart/internal/gophermart/models"
 )
+
+type CtxKey struct{}
 
 type MiddlewareAuth struct {
 	config *models.Config
@@ -20,29 +22,23 @@ func NewMiddlewareAuth(c *models.Config) *MiddlewareAuth {
 
 func (m *MiddlewareAuth) Auth(h http.Handler) http.Handler {
 	logFn := func(w http.ResponseWriter, r *http.Request) {
-		//logger := m.config.Logger
-		fmt.Println("Key: ", m.config.KeyJWT)
-		claims := &models.Claims{}
+		// logger := m.config.Logger
 		tokenStr := r.Header.Get("Authorization")
-		fmt.Println("Token: ", tokenStr)
+
 		if tokenStr == "" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		tokenStr = tokenStr[len("Bearer "):]
-		fmt.Println("token string: ", tokenStr)
 
-		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
-			return []byte(m.config.KeyJWT), nil
-		})
-		fmt.Println("Error: ", err)
-		fmt.Println("Username: ", claims.Username)
-		fmt.Println("Token valid? :", token.Valid)
-		if err != nil || !token.Valid {
+		claims, err := helpers.ValidateJWT(m.config, tokenStr)
+		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		h.ServeHTTP(w, r)
+
+		ctx := context.WithValue(r.Context(), CtxKey{}, claims.User)
+		h.ServeHTTP(w, r.WithContext(ctx))
 	}
 	return http.HandlerFunc(logFn)
 }

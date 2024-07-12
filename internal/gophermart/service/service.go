@@ -2,9 +2,8 @@ package service
 
 import (
 	"fmt"
-	"time"
 
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/vkupriya/go-gophermart/internal/gophermart/helpers"
 	"github.com/vkupriya/go-gophermart/internal/gophermart/models"
 	"github.com/vkupriya/go-gophermart/internal/gophermart/storage"
 )
@@ -35,16 +34,16 @@ func NewStore(c *models.Config) (Storage, error) {
 	return ms, nil
 }
 
-func (g *GophermartService) SvcOrdersAdd(uid string, oid string) error {
-	if err := g.store.OrdersAdd(uid, oid); err != nil {
-		return fmt.Errorf("failed to add order %s for user %s: %w", oid, uid, err)
+func (g *GophermartService) SvcOrdersAdd(user string, oid string) error {
+	if err := g.store.OrdersAdd(user, oid); err != nil {
+		return fmt.Errorf("failed to add order %s for user %s: %w", oid, user, err)
 	}
 	return nil
 }
 
-func (g *GophermartService) SvcOrdersGet(uid string) (models.Orders, error) {
+func (g *GophermartService) SvcOrdersGet(user string) (models.Orders, error) {
 	logger := g.config.Logger
-	res, err := g.store.OrdersGet(uid)
+	res, err := g.store.OrdersGet(user)
 	if err != nil {
 		logger.Sugar().Error(err)
 	}
@@ -61,31 +60,22 @@ func (g *GophermartService) SvcUserAdd(uid string, passwd string) error {
 	return nil
 }
 
-func (g *GophermartService) SvcUserLogin(uid string, passwd string) (string, error) {
+func (g *GophermartService) SvcUserLogin(uname string, passwd string) (string, error) {
 	logger := g.config.Logger
-	key := g.config.KeyJWT
-	user, err := g.store.UserGet(uid)
+	user, err := g.store.UserGet(uname)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch user")
+		return "", fmt.Errorf("failed to query user")
 	}
 
 	if user.Password != passwd {
 		return "", fmt.Errorf("incorrect password")
 	}
 
-	claims := models.Claims{
-		Username: uid,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 1)),
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
-	tokenStr, err := token.SignedString([]byte(key))
+	tokenStr, err := helpers.CreateJWTString(g.config, uname)
 	if err != nil {
-		return "", fmt.Errorf("failed to sign JWT token: %w", err)
+		return "", fmt.Errorf("failed to create JWT token for user %s", uname)
 	}
-	logger.Sugar().Debugf("user %s has been registered", uid)
+
+	logger.Sugar().Debugf("user %s logged in successfully", uname)
 	return tokenStr, nil
 }
