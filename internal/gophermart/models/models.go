@@ -12,6 +12,7 @@ type Config struct {
 	Address        string
 	PostgresDSN    string
 	KeyJWT         string
+	AccrualAddress string
 	ContextTimeout int64
 }
 

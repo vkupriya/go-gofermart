@@ -18,19 +18,24 @@ func NewConfig() (*models.Config, error) {
 	a := flag.String("a", "localhost:8080", "Gophermart server host address and port.")
 	d := flag.String("d", "postgres://postgres:postgres@localhost:5432/gophermart?sslmode=disable", "PostgreSQL DSN")
 	j := flag.String("j", "secret-key", "JWT key")
+	r := flag.String("r", "localhost:8082", "Accrual server address and port")
 
 	flag.Parse()
 
-	if envAddr, ok := os.LookupEnv("ADDRESS"); ok {
+	if envAddr, ok := os.LookupEnv("RUN_ADDRESS"); ok {
 		a = &envAddr
 	}
 
-	if envDSN, ok := os.LookupEnv("DATABASE_DSN"); ok {
+	if envDSN, ok := os.LookupEnv("DATABASE_URI"); ok {
 		d = &envDSN
 	}
 
 	if envJWT, ok := os.LookupEnv("JWT"); ok {
 		j = &envJWT
+	}
+
+	if envAccrualAddr, ok := os.LookupEnv("ACCRUAL_SYSTEM_ADDRESS"); ok {
+		r = &envAccrualAddr
 	}
 
 	logConfig := zap.NewDevelopmentConfig()
@@ -45,5 +50,6 @@ func NewConfig() (*models.Config, error) {
 		PostgresDSN:    *d,
 		ContextTimeout: defaultContextTimeout,
 		KeyJWT:         *j,
+		AccrualAddress: *r,
 	}, nil
 }
