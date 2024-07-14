@@ -104,7 +104,7 @@ func (gr *GophermartHandler) UserAdd(rw http.ResponseWriter, r *http.Request) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	rw.Header().Set("Authorization", "Bearer: "+token)
+	rw.Header().Set("Authorization", "Bearer "+token)
 }
 
 func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) {
@@ -126,7 +126,7 @@ func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) 
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	rw.Header().Set("Authorization", "Bearer: "+token)
+	rw.Header().Set("Authorization", "Bearer "+token)
 }
 
 func (gr *GophermartHandler) OrderAdd(rw http.ResponseWriter, r *http.Request) {
