@@ -26,8 +26,6 @@ func Start() {
 
 	h := handlers.NewGophermartHandler(svc, cfg)
 
-	s.OrdersAdd("vkupriya", "0123456")
-
 	r := handlers.NewGophermartRouter(h)
 
 	logger.Sugar().Infow(

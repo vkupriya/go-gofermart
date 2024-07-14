@@ -8,12 +8,12 @@ import (
 	"github.com/vkupriya/go-gophermart/internal/gophermart/models"
 )
 
-func CreateJWTString(c *models.Config, user string) (string, error) {
+func CreateJWTString(c *models.Config, userid string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, models.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Second * 3600)),
 		},
-		User: user,
+		UserID: userid,
 	})
 
 	// создаём строку токена

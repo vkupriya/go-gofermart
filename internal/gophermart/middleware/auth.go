@@ -37,7 +37,7 @@ func (m *MiddlewareAuth) Auth(h http.Handler) http.Handler {
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), CtxKey{}, claims.User)
+		ctx := context.WithValue(r.Context(), CtxKey{}, claims.UserID)
 		h.ServeHTTP(w, r.WithContext(ctx))
 	}
 	return http.HandlerFunc(logFn)

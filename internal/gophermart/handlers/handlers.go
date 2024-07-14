@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -12,10 +13,12 @@ import (
 )
 
 type Service interface {
-	SvcOrdersAdd(uid string, oid string) error
-	SvcOrdersGet(uid string) (models.Orders, error)
+	// SvcOrdersAdd(uid string, oid string) error
+	// SvcOrdersGet(uid string) (models.Orders, error)
 	SvcUserAdd(uid string, passwd string) error
 	SvcUserLogin(uid string, passwd string) (string, error)
+	SvcOrderAdd(uid string, oid string) error
+	SvcOrdersGet(uid string) (models.Orders, error)
 }
 
 type GophermartHandler struct {
@@ -39,12 +42,13 @@ func NewGophermartRouter(gr *GophermartHandler) chi.Router {
 
 	r.Group(func(r chi.Router) {
 		r.Use(ma.Auth)
-		r.Get("/api/orders/{userID}", gr.GetOrders)
+		r.Post("/api/user/orders", gr.OrderAdd)
+		r.Get("/api/user/orders", gr.OrdersGet)
 	})
 	return r
 }
 
-func (gr *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) {
+func (gr *GophermartHandler) OrdersGet(rw http.ResponseWriter, r *http.Request) {
 	logger := gr.config.Logger
 	v := r.Context().Value(mw.CtxKey{})
 	ctxUname, ok := v.(string)
@@ -54,11 +58,7 @@ func (gr *GophermartHandler) GetOrders(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	fmt.Println("ctxUser: ", ctxUname)
-
-	user := chi.URLParam(r, "userID")
-
-	resp, err := gr.service.SvcOrdersGet(user)
+	resp, err := gr.service.SvcOrdersGet(ctxUname)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -91,16 +91,16 @@ func (gr *GophermartHandler) UserAdd(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := gr.service.SvcUserAdd(user.Login, user.Password); err != nil {
-		logger.Sugar().Error("login already taken")
+	if err := gr.service.SvcUserAdd(user.UserID, user.Password); err != nil {
+		logger.Sugar().Error(zap.Error(err))
 		rw.WriteHeader(http.StatusConflict)
 		return
 	}
 
-	token, err := gr.service.SvcUserLogin(user.Login, user.Password)
+	token, err := gr.service.SvcUserLogin(user.UserID, user.Password)
 	if err != nil || token == "" {
 		fmt.Println(err)
-		logger.Sugar().Errorf("user %s failed to authenticate", user.Login)
+		logger.Sugar().Errorf("user %s failed to authenticate", user.UserID)
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
@@ -119,12 +119,35 @@ func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	token, err := gr.service.SvcUserLogin(user.Login, user.Password)
+	token, err := gr.service.SvcUserLogin(user.UserID, user.Password)
 	if err != nil || token == "" {
 		fmt.Println(err)
-		logger.Sugar().Errorf("user %s failed to authenticate", user.Login)
+		logger.Sugar().Errorf("user %s failed to authenticate", user.UserID)
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 	rw.Header().Set("Authorization", "Bearer: "+token)
+}
+
+func (gr *GophermartHandler) OrderAdd(rw http.ResponseWriter, r *http.Request) {
+	logger := gr.config.Logger
+	v := r.Context().Value(mw.CtxKey{})
+	ctxUname, ok := v.(string)
+	if !ok {
+		logger.Sugar().Error("failed to get user from context value")
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	oid, err := io.ReadAll(r.Body)
+	if err != nil {
+		logger.Sugar().Error("failed to read request body.", zap.Error(err))
+		rw.WriteHeader(http.StatusInternalServerError)
+	}
+
+	if err := gr.service.SvcOrderAdd(ctxUname, string(oid)); err != nil {
+		logger.Sugar().Error(zap.Error(err))
+		rw.WriteHeader(http.StatusConflict)
+		return
+	}
 }
