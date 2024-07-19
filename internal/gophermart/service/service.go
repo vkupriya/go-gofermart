@@ -207,7 +207,8 @@ func (g *GophermartService) SvcOrderGetAccrual(order models.Order) (models.Order
 	client := resty.New()
 	client.SetTimeout(time.Duration(httpTimeout) * time.Second)
 
-	url := fmt.Sprintf("http://%s/api/orders/%s", h, order.Number)
+	url := fmt.Sprintf("%s/api/orders/%s", h, order.Number)
+	fmt.Println("URL:", url)
 	retry = 0
 	for retry <= retries {
 		if retry == retries {

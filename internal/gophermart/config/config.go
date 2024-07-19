@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	"go.uber.org/zap"
 
@@ -40,7 +39,6 @@ func NewConfig() (*models.Config, error) {
 		r = &envAccrualAddr
 	}
 
-	rtrim := strings.Trim(*r, "http//")
 	logConfig := zap.NewDevelopmentConfig()
 	logger, err := logConfig.Build()
 	if err != nil {
@@ -54,6 +52,6 @@ func NewConfig() (*models.Config, error) {
 		ContextTimeout: defaultContextTimeout,
 		KeyJWT:         *j,
 		JWTTokenTTL:    defaultJWTTokenTTL,
-		AccrualAddress: rtrim,
+		AccrualAddress: *r,
 	}, nil
 }
