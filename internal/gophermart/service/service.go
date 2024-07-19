@@ -167,6 +167,7 @@ func (g *GophermartService) SvcOrderFetcher(ctx context.Context) error {
 				fmt.Println("accrualOrder: ", accrualOrder)
 				if err != nil {
 					// revert status of order to NEW
+					logger.Sugar().Error(err)
 					order.Status = "NEW"
 					if err := g.SvcOrderUpdate(order); err != nil {
 						logger.Sugar().Error("failed to update order in DB", zap.Error(err))
