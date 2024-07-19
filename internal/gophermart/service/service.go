@@ -175,6 +175,7 @@ func (g *GophermartService) SvcOrderFetcher(ctx context.Context) error {
 					continue
 				}
 				// Update order in DB
+				fmt.Println("Sending update t")
 				if err := g.SvcOrderUpdate(accrualOrder); err != nil {
 					logger.Sugar().Error("failed to update order in DB", zap.Error(err))
 					failure = true
@@ -214,6 +215,7 @@ func (g *GophermartService) SvcOrderGetAccrual(order models.Order) (models.Order
 		if retry == retries {
 			return models.Order{}, fmt.Errorf("failed to send metrics after %d", retries)
 		}
+		fmt.Println("Sending HTTP GET to Accrual Server")
 		resp, err := client.R().
 			SetHeader("Content-Type", "application/json").
 			Get(url)
@@ -231,6 +233,7 @@ func (g *GophermartService) SvcOrderGetAccrual(order models.Order) (models.Order
 				if err := json.Unmarshal(resp.Body(), &ar); err != nil {
 					return order, fmt.Errorf("failed to unmarshal accrual response: %w", err)
 				}
+				fmt.Println("Received Response: ", ar.Status, ar.Accrual)
 				order.Status = ar.Status
 				order.Accrual = ar.Accrual
 				return order, nil
