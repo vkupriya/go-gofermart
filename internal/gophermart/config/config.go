@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"go.uber.org/zap"
 
@@ -19,7 +20,7 @@ func NewConfig() (*models.Config, error) {
 	a := flag.String("a", "localhost:8080", "Gophermart server host address and port.")
 	d := flag.String("d", "postgres://postgres:postgres@localhost:5432/gophermart?sslmode=disable", "PostgreSQL DSN")
 	j := flag.String("j", "secret-key", "JWT key")
-	r := flag.String("r", "localhost:8082", "Accrual server address and port")
+	r := flag.String("r", "http//localhost:8082", "Accrual server address and port")
 
 	flag.Parse()
 
@@ -39,6 +40,7 @@ func NewConfig() (*models.Config, error) {
 		r = &envAccrualAddr
 	}
 
+	rtrim := strings.Trim(*r, "http//")
 	logConfig := zap.NewDevelopmentConfig()
 	logger, err := logConfig.Build()
 	if err != nil {
@@ -52,6 +54,6 @@ func NewConfig() (*models.Config, error) {
 		ContextTimeout: defaultContextTimeout,
 		KeyJWT:         *j,
 		JWTTokenTTL:    defaultJWTTokenTTL,
-		AccrualAddress: *r,
+		AccrualAddress: rtrim,
 	}, nil
 }
