@@ -185,8 +185,8 @@ func (p *PostgresDB) BalanceGet(c *models.Config, userid string) (models.Balance
 	db := p.pool
 
 	balance := models.Balance{}
-	var accrual int64
-	var sum int64
+	var accrual float32
+	var sum float32
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
 	defer cancel()
