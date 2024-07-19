@@ -201,7 +201,7 @@ func (p *PostgresDB) BalanceGet(c *models.Config, userid string) (models.Balance
 	}
 	balance.Current = accrual
 
-	querySQL = "SELECT SUM(sum) FROM withdrawals WHERE userid=$1"
+	querySQL = "SELECT COALESCE(SUM(sum), 0) FROM withdrawals WHERE userid=$1"
 
 	row = db.QueryRow(ctx, querySQL, userid)
 
