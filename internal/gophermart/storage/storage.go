@@ -53,21 +53,21 @@ func NewPostgresDB(c *models.Config) (*PostgresDB, error) {
 		`CREATE TABLE IF NOT EXISTS users(
 			userid VARCHAR UNIQUE NOT NULL,
 			password VARCHAR NOT NULL,
-			accrual BIGINT NOT NULL,
+			accrual FLOAT NOT NULL,
 			PRIMARY KEY (userid)
 		)`,
 		`CREATE TABLE IF NOT EXISTS orders(
 			userid VARCHAR NOT NULL,
 			number VARCHAR UNIQUE NOT NULL,
 			status VARCHAR NOT NULL,
-			accrual BIGINT NOT NULL,
+			accrual FLOAT NOT NULL,
 			uploaded_at timestamp,
 			PRIMARY KEY (number)
 		)`,
 		`CREATE TABLE IF NOT EXISTS withdrawals(
 			userid VARCHAR NOT NULL,
 			number VARCHAR UNIQUE NOT NULL,
-			sum BIGINT NOT NULL,
+			sum FLOAT NOT NULL,
 			processed_at timestamp
 		)`,
 	}
