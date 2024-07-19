@@ -12,6 +12,7 @@ import (
 
 const (
 	defaultContextTimeout int64 = 3
+	defaultJWTTokenTTL    int64 = 3600
 )
 
 func NewConfig() (*models.Config, error) {
@@ -50,6 +51,7 @@ func NewConfig() (*models.Config, error) {
 		PostgresDSN:    *d,
 		ContextTimeout: defaultContextTimeout,
 		KeyJWT:         *j,
+		JWTTokenTTL:    defaultJWTTokenTTL,
 		AccrualAddress: *r,
 	}, nil
 }

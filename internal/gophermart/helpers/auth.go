@@ -11,7 +11,7 @@ import (
 func CreateJWTString(c *models.Config, userid string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, models.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Second * 3600)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Second * time.Duration(c.JWTTokenTTL))),
 		},
 		UserID: userid,
 	})
@@ -19,7 +19,7 @@ func CreateJWTString(c *models.Config, userid string) (string, error) {
 	// создаём строку токена
 	tokenString, err := token.SignedString([]byte(c.KeyJWT))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to sign token: %w", err)
 	}
 
 	// возвращаем строку токена
@@ -39,7 +39,7 @@ func ValidateJWT(c *models.Config, tokenString string) (*models.Claims, error) {
 	}
 
 	if !token.Valid {
-		return nil, fmt.Errorf("token is invalid.")
+		return nil, fmt.Errorf("token is invalid")
 	}
 	return claims, nil
 }
