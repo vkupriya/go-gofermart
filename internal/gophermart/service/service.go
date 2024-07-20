@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -75,7 +76,7 @@ func (g *GophermartService) SvcUserLogin(userid string, passwd string) (string, 
 	}
 
 	if user.Password != passwd {
-		return "", fmt.Errorf("incorrect password")
+		return "", fmt.Errorf("incorrect password for user %s", userid)
 	}
 
 	tokenStr, err := helpers.CreateJWTString(g.config, userid)
@@ -158,37 +159,36 @@ func (g *GophermartService) SvcOrderFetcher(ctx context.Context) error {
 			for _, order := range orders {
 				if failure {
 					order.Status = "NEW"
-					if err := g.SvcOrderUpdate(order); err != nil {
+					if err := g.SvcOrderUpdate(&order); err != nil {
 						logger.Sugar().Error("failed to update order in DB", zap.Error(err))
 					}
 					continue
 				}
-				accrualOrder, err := g.SvcOrderGetAccrual(order)
-				fmt.Println("accrualOrder: ", accrualOrder)
+				accrualOrder, err := g.SvcOrderGetAccrual(&order)
 				if err != nil {
 					// revert status of order to NEW
 					order.Status = "NEW"
-					if err := g.SvcOrderUpdate(order); err != nil {
+					if err := g.SvcOrderUpdate(&order); err != nil {
 						logger.Sugar().Error("failed to update order in DB", zap.Error(err))
 					}
 					failure = true
 					continue
 				}
 				// Update order in DB
-				if err := g.SvcOrderUpdate(accrualOrder); err != nil {
+				if err := g.SvcOrderUpdate(&accrualOrder); err != nil {
 					logger.Sugar().Error("failed to update order in DB", zap.Error(err))
 					failure = true
 				}
 			}
 			// exiting Ticker
 			if failure {
-				return fmt.Errorf("failure to communicate to accrual service and/or DB, exiting")
+				return errors.New("failure to communicate to accrual service and/or DB, exiting")
 			}
 		}
 	}
 }
 
-func (g *GophermartService) SvcOrderGetAccrual(order models.Order) (models.Order, error) {
+func (g *GophermartService) SvcOrderGetAccrual(order *models.Order) (models.Order, error) {
 	const (
 		httpTimeout       int   = 30
 		retries           int   = 3
@@ -213,7 +213,7 @@ func (g *GophermartService) SvcOrderGetAccrual(order models.Order) (models.Order
 		if retry == retries {
 			return models.Order{}, fmt.Errorf("failed to send metrics after %d", retries)
 		}
-		fmt.Println("Sending HTTP GET to Accrual Server")
+
 		resp, err := client.R().
 			SetHeader("Content-Type", "application/json").
 			Get(url)
@@ -229,11 +229,11 @@ func (g *GophermartService) SvcOrderGetAccrual(order models.Order) (models.Order
 
 			if resp.StatusCode() == http.StatusOK {
 				if err := json.Unmarshal(resp.Body(), &ar); err != nil {
-					return order, fmt.Errorf("failed to unmarshal accrual response: %w", err)
+					return *order, fmt.Errorf("failed to unmarshal accrual response: %w", err)
 				}
 				order.Status = ar.Status
 				order.Accrual = ar.Accrual
-				return order, nil
+				return *order, nil
 			} else {
 				break
 			}
@@ -243,12 +243,12 @@ func (g *GophermartService) SvcOrderGetAccrual(order models.Order) (models.Order
 	return models.Order{}, nil
 }
 
-func (g *GophermartService) SvcOrderUpdate(order models.Order) error {
-	if err := g.store.UpdateOrder(g.config, order); err != nil {
+func (g *GophermartService) SvcOrderUpdate(order *models.Order) error {
+	if err := g.store.UpdateOrder(g.config, *order); err != nil {
 		return fmt.Errorf("error updating order %s: %w", order.Number, err)
 	}
 	if order.Accrual != 0 {
-		if err := g.store.UserAddAccrual(g.config, order); err != nil {
+		if err := g.store.UserAddAccrual(g.config, *order); err != nil {
 			return fmt.Errorf("failed to add accrual for user %s: %w", order.UserID, err)
 		}
 	}

@@ -95,7 +95,7 @@ func Start() (err error) {
 	})
 
 	if err := g.Wait(); err != nil {
-		return err
+		return fmt.Errorf("go routines stopped with error: %w", err)
 	}
 
 	return nil

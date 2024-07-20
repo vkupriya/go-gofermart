@@ -7,7 +7,6 @@ import (
 )
 
 func main() {
-
 	if err := gophermart.Start(); err != nil {
 		log.Fatal(err)
 	}
