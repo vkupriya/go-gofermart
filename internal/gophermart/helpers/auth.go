@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -39,7 +40,7 @@ func ValidateJWT(c *models.Config, tokenString string) (*models.Claims, error) {
 	}
 
 	if !token.Valid {
-		return nil, fmt.Errorf("token is invalid")
+		return nil, errors.New("token is invalid")
 	}
 	return claims, nil
 }

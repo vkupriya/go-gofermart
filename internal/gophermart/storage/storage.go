@@ -236,7 +236,7 @@ func (p *PostgresDB) GetAllNewOrders(c *models.Config) (models.Orders, error) {
 	return orders, nil
 }
 
-func (p *PostgresDB) UpdateOrder(c *models.Config, order models.Order) error {
+func (p *PostgresDB) UpdateOrder(c *models.Config, order *models.Order) error {
 	db := p.pool
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
@@ -252,7 +252,7 @@ func (p *PostgresDB) UpdateOrder(c *models.Config, order models.Order) error {
 	return nil
 }
 
-func (p *PostgresDB) UserAddAccrual(c *models.Config, order models.Order) error {
+func (p *PostgresDB) UserAddAccrual(c *models.Config, order *models.Order) error {
 	db := p.pool
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)

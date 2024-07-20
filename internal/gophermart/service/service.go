@@ -24,7 +24,7 @@ type Storage interface {
 	OrderGet(c *models.Config, oid string) (models.Order, error)
 	OrdersGet(c *models.Config, userid string) (models.Orders, error)
 	GetAllNewOrders(c *models.Config) (models.Orders, error)
-	UpdateOrder(c *models.Config, order models.Order) error
+	UpdateOrder(c *models.Config, order *models.Order) error
 	UserAddAccrual(c *models.Config, order models.Order) error
 	AccrualWithdraw(c *models.Config, w models.Withdrawal) error
 	WithdrawalsGet(c *models.Config, userid string) (models.Withdrawals, error)
@@ -244,7 +244,7 @@ func (g *GophermartService) SvcOrderGetAccrual(order *models.Order) (models.Orde
 }
 
 func (g *GophermartService) SvcOrderUpdate(order *models.Order) error {
-	if err := g.store.UpdateOrder(g.config, *order); err != nil {
+	if err := g.store.UpdateOrder(g.config, order); err != nil {
 		return fmt.Errorf("error updating order %s: %w", order.Number, err)
 	}
 	if order.Accrual != 0 {
