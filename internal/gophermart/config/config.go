@@ -86,6 +86,7 @@ func NewConfig() (*models.Config, error) {
 	fmt.Println("Accrual Server: ", *r)
 	fmt.Println("DSN: ", *d)
 	fmt.Println("JWT: ", *j)
+	fmt.Println("Server address: ", *a)
 
 	return &models.Config{
 		Address:               *a,
