@@ -68,7 +68,7 @@ func TestOrdersGet(t *testing.T) {
 
 			h := NewGophermartHandler(svc, logger)
 
-			r := httptest.NewRequest(tc.method, tc.path, nil)
+			r := httptest.NewRequest(tc.method, tc.path, http.NoBody)
 			w := httptest.NewRecorder()
 
 			ctx := r.Context()
@@ -261,7 +261,7 @@ func TestBalanceGet(t *testing.T) {
 
 			h := NewGophermartHandler(svc, logger)
 
-			r := httptest.NewRequest(tc.method, tc.path, nil)
+			r := httptest.NewRequest(tc.method, tc.path, http.NoBody)
 			w := httptest.NewRecorder()
 
 			ctx := r.Context()

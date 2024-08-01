@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -59,9 +58,9 @@ func NewConfig() (*models.Config, error) {
 		}
 	}
 
-	if !strings.Contains(*r, "://") {
-		*r = "http://" + *r
-	}
+	// if !strings.Contains(*r, "://") {
+	// 	*r = "http://" + *r
+	// }
 
 	if *d == "" {
 		if envDSN, ok := os.LookupEnv("DATABASE_URI"); ok {
