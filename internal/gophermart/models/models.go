@@ -8,13 +8,20 @@ import (
 )
 
 type Config struct {
-	Logger         *zap.Logger
-	Address        string
-	PostgresDSN    string
-	KeyJWT         string
-	AccrualAddress string
-	JWTTokenTTL    int64
-	ContextTimeout int64
+	Logger                *zap.Logger
+	Address               string
+	PostgresDSN           string
+	KeyJWT                string
+	AccrualAddress        string
+	JWTTokenTTL           int64
+	ContextTimeout        time.Duration
+	AccrualHTTPTimeout    time.Duration
+	AccrualRateLimitWait  time.Duration
+	AccrualInterval       time.Duration
+	AccrualWorkerRetry    time.Duration
+	AccrualWorkers        int64
+	TimeoutServerShutdown time.Duration
+	TimeoutShutdown       time.Duration
 }
 
 type Orders []Order

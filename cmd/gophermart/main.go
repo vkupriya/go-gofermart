@@ -10,5 +10,4 @@ func main() {
 	if err := gophermart.Start(); err != nil {
 		log.Fatal(err)
 	}
-	log.Println("gophermart server stopped.")
 }

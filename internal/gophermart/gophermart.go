@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os/signal"
 	"syscall"
-	"time"
+
+	"go.uber.org/zap"
 
 	"golang.org/x/sync/errgroup"
 
@@ -16,42 +16,38 @@ import (
 	"github.com/vkupriya/go-gophermart/internal/gophermart/server"
 	"github.com/vkupriya/go-gophermart/internal/gophermart/server/handlers"
 	"github.com/vkupriya/go-gophermart/internal/gophermart/service"
+	"github.com/vkupriya/go-gophermart/internal/gophermart/storage"
 )
 
 func Start() (err error) {
-	const (
-		timeoutServerShutdown = time.Second * 5
-		timeoutShutdown       = time.Second * 10
-	)
+	cfg, err := config.NewConfig()
+	if err != nil {
+		return fmt.Errorf("failed to initialize config: %w", err)
+	}
 
+	logger := cfg.Logger
 	rootCtx, cancelCtx := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancelCtx()
 
 	g, ctx := errgroup.WithContext(rootCtx)
 
-	context.AfterFunc(ctx, func() {
-		ctx, cancelCtx := context.WithTimeout(context.Background(), timeoutShutdown)
+	_ = context.AfterFunc(ctx, func() {
+		ctx, cancelCtx := context.WithTimeout(context.Background(), cfg.TimeoutShutdown)
 		defer cancelCtx()
 
 		<-ctx.Done()
-		log.Fatal("failed to gracefully shutdown the service")
+		logger.Sugar().Error("failed to gracefully shutdown the service")
 	})
 
-	cfg, err := config.NewConfig()
+	s, err := storage.NewPostgresDB(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to initialize config: %w", err)
-	}
-	logger := cfg.Logger
-
-	s, err := service.NewStore(cfg)
-	if err != nil {
-		logger.Sugar().Fatal(err)
+		return fmt.Errorf("failed to initialize PostgresDB: %w", err)
 	}
 
 	svc := service.NewGophermartService(s, cfg)
 
-	h := handlers.NewGophermartHandler(svc, cfg)
-	r := handlers.NewGophermartRouter(h)
+	h := handlers.NewGophermartHandler(svc, cfg.Logger)
+	r := handlers.NewGophermartRouter(cfg, h)
 	srv := server.NewServer(cfg, r)
 
 	logger.Sugar().Infow(
@@ -59,11 +55,30 @@ func Start() (err error) {
 		"addr", cfg.Address,
 	)
 
+	g.Go(func() error {
+		defer logger.Sugar().Info("closed DB")
+
+		<-ctx.Done()
+
+		s.Close()
+		return nil
+	})
+
 	g.Go(func() (err error) {
 		defer func() {
 			errRec := recover()
 			if errRec != nil {
-				err = fmt.Errorf("a panic occurred: %v", errRec)
+				switch x := errRec.(type) {
+				case string:
+					err = errors.New(x)
+					logger.Sugar().Error("a panic occured", zap.Error(err))
+				case error:
+					err = fmt.Errorf("a panic occurred: %w", x)
+					logger.Sugar().Error(zap.Error(err))
+				default:
+					err = errors.New("unknown panic")
+					logger.Sugar().Error(zap.Error(err))
+				}
 			}
 		}()
 		if err = srv.ListenAndServe(); err != nil {
@@ -76,20 +91,20 @@ func Start() (err error) {
 	})
 
 	g.Go(func() error {
-		defer log.Print("server has been shutdown")
+		defer logger.Sugar().Info("server has been shutdown")
 		<-ctx.Done()
 
-		shutdownTimeoutCtx, cancelShutdownTimeoutCtx := context.WithTimeout(context.Background(), timeoutServerShutdown)
+		shutdownTimeoutCtx, cancelShutdownTimeoutCtx := context.WithTimeout(context.Background(), cfg.TimeoutServerShutdown)
 		defer cancelShutdownTimeoutCtx()
 		if err := srv.Shutdown(shutdownTimeoutCtx); err != nil {
-			log.Printf("an error occurred during server shutdown: %v", err)
+			return fmt.Errorf("an error occurred during server shutdown: %w", err)
 		}
 		return nil
 	})
 
 	g.Go(func() error {
-		if err := svc.SvcOrderFetcher(ctx); err != nil {
-			return fmt.Errorf("order fetcher has been terminate with error: %w", err)
+		if err := svc.OrderDispatcher(ctx); err != nil {
+			return fmt.Errorf("order fetcher has been terminated with error: %w", err)
 		}
 		return nil
 	})
@@ -97,6 +112,5 @@ func Start() (err error) {
 	if err := g.Wait(); err != nil {
 		return fmt.Errorf("go routines stopped with error: %w", err)
 	}
-
 	return nil
 }

@@ -14,46 +14,50 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	errorNoContextUser        string = "failed to get user from context value"
+	errorIncorrectOrderNumber string = "incorrect order number "
+)
+
 type Service interface {
-	SvcUserAdd(user models.User) error
-	SvcUserGet(uid string) (models.User, error)
-	SvcUserLogin(uid string, passwd string) (string, error)
-	SvcOrderAdd(uid string, oid string) error
-	SvcOrdersGet(uid string) (models.Orders, error)
-	SvcOrderGet(oid string) (models.Order, error)
-	SvcAccrualWithdraw(w models.Withdrawal) error
-	SvcWithdrawalsGet(uid string) (models.Withdrawals, error)
-	SvcBalanceGet(uid string) (models.Balance, error)
+	UserAdd(user models.User) error
+	UserGet(uid string) (models.User, error)
+	UserLogin(uid string, passwd string) (string, error)
+	OrderAdd(uid string, oid string) error
+	OrdersGet(uid string) (models.Orders, error)
+	OrderGet(oid string) (models.Order, error)
+	AccrualWithdraw(w models.Withdrawal) error
+	WithdrawalsGet(uid string) (models.Withdrawals, error)
+	BalanceGet(uid string) (models.Balance, error)
 }
 
 type GophermartHandler struct {
 	service Service
-	config  *models.Config
+	logger  *zap.Logger
 }
 
-const (
-	ErrorNoContextUser        string = "failed to get user from context value"
-	ErrorIncorrectOrderNumber string = "incorrect order number "
-)
-
-func NewGophermartHandler(service Service, cfg *models.Config) *GophermartHandler {
+func NewGophermartHandler(service Service, logger *zap.Logger) *GophermartHandler {
 	return &GophermartHandler{
 		service: service,
-		config:  cfg,
+		logger:  logger,
 	}
 }
 
-func NewGophermartRouter(gr *GophermartHandler) chi.Router {
+func NewGophermartRouter(cfg *models.Config, gr *GophermartHandler) chi.Router {
 	r := chi.NewRouter()
 
-	ma := mw.NewMiddlewareAuth(gr.config)
-	ml := mw.NewMiddlewareLogger(gr.config)
+	ma := mw.NewMiddlewareAuth(cfg)
+	ml := mw.NewMiddlewareLogger(gr.logger)
+	mg := mw.NewMiddlewareGzip(gr.logger)
+	mr := mw.NewMiddlewareRecovery(gr.logger)
 	r.Use(ml.Logging)
+	r.Use(mr.Recovery)
 	r.Post("/api/user/register", gr.UserAdd)
 	r.Post("/api/user/login", gr.UserLogin)
 
 	r.Group(func(r chi.Router) {
 		r.Use(ma.Auth)
+		r.Use(mg.GzipHandler)
 		r.Post("/api/user/orders", gr.OrderAdd)
 		r.Get("/api/user/orders", gr.OrdersGet)
 		r.Post("/api/user/balance/withdraw", gr.AccrualWithdraw)
@@ -64,16 +68,16 @@ func NewGophermartRouter(gr *GophermartHandler) chi.Router {
 }
 
 func (gr *GophermartHandler) OrdersGet(rw http.ResponseWriter, r *http.Request) {
-	logger := gr.config.Logger
+	logger := gr.logger
 	v := r.Context().Value(mw.CtxKey{})
 	ctxUname, ok := v.(string)
 	if !ok {
-		logger.Sugar().Error(ErrorNoContextUser)
+		logger.Sugar().Error(errorNoContextUser)
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	resp, err := gr.service.SvcOrdersGet(ctxUname)
+	resp, err := gr.service.OrdersGet(ctxUname)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -95,7 +99,7 @@ func (gr *GophermartHandler) OrdersGet(rw http.ResponseWriter, r *http.Request) 
 }
 
 func (gr *GophermartHandler) UserAdd(rw http.ResponseWriter, r *http.Request) {
-	logger := gr.config.Logger
+	logger := gr.logger
 
 	var user models.User
 
@@ -106,13 +110,13 @@ func (gr *GophermartHandler) UserAdd(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := gr.service.SvcUserAdd(user); err != nil {
+	if err := gr.service.UserAdd(user); err != nil {
 		logger.Sugar().Error(zap.Error(err))
 		rw.WriteHeader(http.StatusConflict)
 		return
 	}
 
-	token, err := gr.service.SvcUserLogin(user.UserID, user.Password)
+	token, err := gr.service.UserLogin(user.UserID, user.Password)
 	if err != nil || token == "" {
 		fmt.Println(err)
 		logger.Sugar().Errorf("user %s failed to authenticate", user.UserID)
@@ -123,7 +127,7 @@ func (gr *GophermartHandler) UserAdd(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) {
-	logger := gr.config.Logger
+	logger := gr.logger
 
 	var user models.User
 
@@ -134,9 +138,8 @@ func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	token, err := gr.service.SvcUserLogin(user.UserID, user.Password)
+	token, err := gr.service.UserLogin(user.UserID, user.Password)
 	if err != nil || token == "" {
-		fmt.Println(err)
 		logger.Sugar().Errorf("user %s failed to authenticate", user.UserID)
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
@@ -145,11 +148,11 @@ func (gr *GophermartHandler) UserLogin(rw http.ResponseWriter, r *http.Request) 
 }
 
 func (gr *GophermartHandler) OrderAdd(rw http.ResponseWriter, r *http.Request) {
-	logger := gr.config.Logger
+	logger := gr.logger
 	v := r.Context().Value(mw.CtxKey{})
 	ctxUname, ok := v.(string)
 	if !ok {
-		logger.Sugar().Error(ErrorNoContextUser)
+		logger.Sugar().Error(errorNoContextUser)
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -162,12 +165,12 @@ func (gr *GophermartHandler) OrderAdd(rw http.ResponseWriter, r *http.Request) {
 	oid := string(b)
 	orderNum, err := strconv.ParseInt(oid, 10, 64)
 	if err != nil || !helpers.ValidOrder(orderNum) {
-		logger.Sugar().Errorf(ErrorIncorrectOrderNumber, oid)
+		logger.Sugar().Errorf(errorIncorrectOrderNumber, oid)
 		rw.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
 
-	order, err := gr.service.SvcOrderGet(oid)
+	order, err := gr.service.OrderGet(oid)
 	if err != nil {
 		logger.Sugar().Error("failed to get order from DB", zap.Error(err))
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -183,7 +186,7 @@ func (gr *GophermartHandler) OrderAdd(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := gr.service.SvcOrderAdd(ctxUname, oid); err != nil {
+	if err := gr.service.OrderAdd(ctxUname, oid); err != nil {
 		logger.Sugar().Error(zap.Error(err))
 		rw.WriteHeader(http.StatusConflict)
 		return
@@ -193,12 +196,12 @@ func (gr *GophermartHandler) OrderAdd(rw http.ResponseWriter, r *http.Request) {
 }
 
 func (gr *GophermartHandler) AccrualWithdraw(rw http.ResponseWriter, r *http.Request) {
-	logger := gr.config.Logger
+	logger := gr.logger
 	var w models.Withdrawal
 	v := r.Context().Value(mw.CtxKey{})
 	ctxUname, ok := v.(string)
 	if !ok {
-		logger.Sugar().Error(ErrorNoContextUser)
+		logger.Sugar().Error(errorNoContextUser)
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -212,12 +215,12 @@ func (gr *GophermartHandler) AccrualWithdraw(rw http.ResponseWriter, r *http.Req
 	w.UserID = ctxUname
 	orderNum, err := strconv.ParseInt(w.Number, 10, 64)
 	if err != nil || !helpers.ValidOrder(orderNum) {
-		logger.Sugar().Errorf(ErrorIncorrectOrderNumber, w.Number)
+		logger.Sugar().Errorf(errorIncorrectOrderNumber, w.Number)
 		rw.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
 
-	user, err := gr.service.SvcUserGet(ctxUname)
+	user, err := gr.service.UserGet(ctxUname)
 	if err != nil {
 		logger.Sugar().Error("failed to get user from DB", zap.Error(err))
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -228,7 +231,7 @@ func (gr *GophermartHandler) AccrualWithdraw(rw http.ResponseWriter, r *http.Req
 		rw.WriteHeader(http.StatusPaymentRequired)
 		return
 	}
-	if err := gr.service.SvcAccrualWithdraw(w); err != nil {
+	if err := gr.service.AccrualWithdraw(w); err != nil {
 		logger.Sugar().Error(zap.Error(err))
 		rw.WriteHeader(http.StatusConflict)
 		return
@@ -236,16 +239,16 @@ func (gr *GophermartHandler) AccrualWithdraw(rw http.ResponseWriter, r *http.Req
 }
 
 func (gr *GophermartHandler) WithdrawalsGet(rw http.ResponseWriter, r *http.Request) {
-	logger := gr.config.Logger
+	logger := gr.logger
 	v := r.Context().Value(mw.CtxKey{})
 	ctxUname, ok := v.(string)
 	if !ok {
-		logger.Sugar().Error(ErrorNoContextUser)
+		logger.Sugar().Error(errorNoContextUser)
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	w, err := gr.service.SvcWithdrawalsGet(ctxUname)
+	w, err := gr.service.WithdrawalsGet(ctxUname)
 	if err != nil {
 		logger.Sugar().Error("failed to get withdrawals", zap.Error(err))
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -269,16 +272,16 @@ func (gr *GophermartHandler) WithdrawalsGet(rw http.ResponseWriter, r *http.Requ
 }
 
 func (gr *GophermartHandler) BalanceGet(rw http.ResponseWriter, r *http.Request) {
-	logger := gr.config.Logger
+	logger := gr.logger
 	v := r.Context().Value(mw.CtxKey{})
 	ctxUname, ok := v.(string)
 	if !ok {
-		logger.Sugar().Error(ErrorNoContextUser)
+		logger.Sugar().Error(errorNoContextUser)
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	bal, err := gr.service.SvcBalanceGet(ctxUname)
+	bal, err := gr.service.BalanceGet(ctxUname)
 	if err != nil {
 		logger.Sugar().Error("failed to get user balance", zap.Error(err))
 		rw.WriteHeader(http.StatusInternalServerError)

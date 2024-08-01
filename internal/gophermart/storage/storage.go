@@ -2,84 +2,45 @@ package storage
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/vkupriya/go-gophermart/internal/gophermart/models"
-	"go.uber.org/zap"
 )
 
 type PostgresDB struct {
 	pool *pgxpool.Pool
 }
 
+const (
+	errRollback string = "failed to rollback transaction: %w"
+)
+
 func NewPostgresDB(c *models.Config) (*PostgresDB, error) {
-	logger := c.Logger
+	if err := runMigrations(c.PostgresDSN); err != nil {
+		return nil, fmt.Errorf("failed to run DB migrations: %w", err)
+	}
+
 	poolCfg, err := pgxpool.ParseConfig(c.PostgresDSN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse the DSN: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
-
-	defer cancel()
+	ctx := context.Background()
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize a connection pool: %w", err)
-	}
-
-	tx, err := pool.Begin(ctx)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to start a transaction: %w", err)
-	}
-
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			if !errors.Is(err, pgx.ErrTxClosed) {
-				logger.Sugar().Errorf("failed to rollback the transaction", zap.Error(err))
-			}
-		}
-	}()
-
-	createSchema := []string{
-		`CREATE TABLE IF NOT EXISTS users(
-			userid VARCHAR UNIQUE NOT NULL,
-			password VARCHAR NOT NULL,
-			accrual FLOAT NOT NULL,
-			PRIMARY KEY (userid)
-		)`,
-		`CREATE TABLE IF NOT EXISTS orders(
-			userid VARCHAR NOT NULL,
-			number VARCHAR UNIQUE NOT NULL,
-			status VARCHAR NOT NULL,
-			accrual FLOAT NOT NULL,
-			uploaded_at timestamp,
-			PRIMARY KEY (number)
-		)`,
-		`CREATE TABLE IF NOT EXISTS withdrawals(
-			userid VARCHAR NOT NULL,
-			number VARCHAR UNIQUE NOT NULL,
-			sum FLOAT NOT NULL,
-			processed_at timestamp
-		)`,
-	}
-
-	for _, table := range createSchema {
-		if _, err := tx.Exec(ctx, table); err != nil {
-			return nil, fmt.Errorf("failed to execute statement `%s`: %w", table, err)
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("failed to commit PostgresDB transaction: %w", err)
 	}
 
 	return &PostgresDB{
@@ -87,17 +48,38 @@ func NewPostgresDB(c *models.Config) (*PostgresDB, error) {
 	}, nil
 }
 
+//go:embed migrations/*.sql
+var migrationsDir embed.FS
+
+func runMigrations(dsn string) error {
+	d, err := iofs.New(migrationsDir, "migrations")
+	if err != nil {
+		return fmt.Errorf("failed to return an iofs driver: %w", err)
+	}
+
+	m, err := migrate.NewWithSourceInstance("iofs", d, dsn)
+	if err != nil {
+		return fmt.Errorf("failed to get a new migrate instance: %w", err)
+	}
+	if err := m.Up(); err != nil {
+		if !errors.Is(err, migrate.ErrNoChange) {
+			return fmt.Errorf("failed to apply migrations to the DB: %w", err)
+		}
+	}
+	return nil
+}
+
 func (p *PostgresDB) UserAdd(c *models.Config, u models.User) error {
 	db := p.pool
-	var PgErr *pgconn.PgError
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	var pgErr *pgconn.PgError
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
 
 	querySQL := "INSERT INTO users (userid, password, accrual) VALUES($1, $2, $3)"
 
 	_, err := db.Exec(ctx, querySQL, u.UserID, u.Password, u.Accrual)
 	if err != nil {
-		if errors.As(err, &PgErr) && PgErr.Code == pgerrcode.UniqueViolation {
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return fmt.Errorf("user already exists: %w", err)
 		}
 		return fmt.Errorf("failed to insert user %s into Postgres DB: %w", u.UserID, err)
@@ -108,7 +90,7 @@ func (p *PostgresDB) UserAdd(c *models.Config, u models.User) error {
 func (p *PostgresDB) UserGet(c *models.Config, userid string) (models.User, error) {
 	db := p.pool
 	var user models.User
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
 
 	row := db.QueryRow(ctx, "SELECT * FROM users WHERE userid=$1", userid)
@@ -122,8 +104,8 @@ func (p *PostgresDB) UserGet(c *models.Config, userid string) (models.User, erro
 
 func (p *PostgresDB) OrderAdd(c *models.Config, userid string, oid string) error {
 	db := p.pool
-	var PgErr *pgconn.PgError
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	var pgErr *pgconn.PgError
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
 
 	t := time.Now().Format(time.RFC3339)
@@ -131,7 +113,7 @@ func (p *PostgresDB) OrderAdd(c *models.Config, userid string, oid string) error
 
 	_, err := db.Exec(ctx, querySQL, userid, oid, "NEW", 0, t)
 	if err != nil {
-		if errors.As(err, &PgErr) && PgErr.Code == pgerrcode.UniqueViolation {
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
 			return fmt.Errorf("order already exists: %w", err)
 		}
 		return fmt.Errorf("failed to insert order %s into Postgres DB: %w", userid, err)
@@ -143,7 +125,7 @@ func (p *PostgresDB) OrderAdd(c *models.Config, userid string, oid string) error
 func (p *PostgresDB) OrderGet(c *models.Config, oid string) (models.Order, error) {
 	db := p.pool
 	var order models.Order
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
 
 	querySQL := "SELECT * FROM orders WHERE number=$1"
@@ -163,7 +145,7 @@ func (p *PostgresDB) OrderGet(c *models.Config, oid string) (models.Order, error
 func (p *PostgresDB) OrdersGet(c *models.Config, userid string) (models.Orders, error) {
 	db := p.pool
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
 
 	querySQL := "SELECT * FROM orders WHERE userid=$1 ORDER BY uploaded_at ASC"
@@ -188,26 +170,40 @@ func (p *PostgresDB) BalanceGet(c *models.Config, userid string) (models.Balance
 	var accrual float32
 	var sum float32
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
+
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return balance, fmt.Errorf("failed to start transaction: %w", err)
+	}
 
 	querySQL := "SELECT (accrual) FROM users WHERE userid=$1"
 
-	row := db.QueryRow(ctx, querySQL, userid)
+	row := tx.QueryRow(ctx, querySQL, userid)
 
-	err := row.Scan(&accrual)
+	err = row.Scan(&accrual)
 	if err != nil {
+		if err := tx.Rollback(ctx); err != nil {
+			return balance, fmt.Errorf(errRollback, err)
+		}
 		return balance, fmt.Errorf("failed to query user table in DB: %w", err)
 	}
 	balance.Current = accrual
 
 	querySQL = "SELECT COALESCE(SUM(sum), 0) FROM withdrawals WHERE userid=$1"
 
-	row = db.QueryRow(ctx, querySQL, userid)
+	row = tx.QueryRow(ctx, querySQL, userid)
 
 	err = row.Scan(&sum)
 	if err != nil {
+		if err := tx.Rollback(ctx); err != nil {
+			return balance, fmt.Errorf(errRollback, err)
+		}
 		return balance, fmt.Errorf("failed to query withdrawals table in DB: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return balance, fmt.Errorf("failed to commit transaction for user %w", err)
 	}
 
 	balance.Withdrawn = sum
@@ -215,13 +211,13 @@ func (p *PostgresDB) BalanceGet(c *models.Config, userid string) (models.Balance
 	return balance, nil
 }
 
-func (p *PostgresDB) GetAllNewOrders(c *models.Config) (models.Orders, error) {
+func (p *PostgresDB) GetUnprocessedOrders(c *models.Config) (models.Orders, error) {
 	db := p.pool
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
 
-	querySQL := "UPDATE orders SET status='PROCESSING' WHERE status='NEW' RETURNING *"
+	querySQL := "UPDATE orders SET status='PROCESSING' WHERE (status='NEW' OR status='PROCESSING') RETURNING *"
 
 	rows, err := db.Query(ctx, querySQL)
 	if err != nil {
@@ -239,7 +235,7 @@ func (p *PostgresDB) GetAllNewOrders(c *models.Config) (models.Orders, error) {
 func (p *PostgresDB) UpdateOrder(c *models.Config, order *models.Order) error {
 	db := p.pool
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
 
 	querySQL := "UPDATE orders SET status=$1, accrual=$2 WHERE number=$3"
@@ -255,7 +251,7 @@ func (p *PostgresDB) UpdateOrder(c *models.Config, order *models.Order) error {
 func (p *PostgresDB) UserAddAccrual(c *models.Config, order *models.Order) error {
 	db := p.pool
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
 
 	querySQL := "UPDATE users SET accrual = accrual + $1 WHERE userid=$2"
@@ -270,7 +266,7 @@ func (p *PostgresDB) UserAddAccrual(c *models.Config, order *models.Order) error
 func (p *PostgresDB) AccrualWithdraw(c *models.Config, w models.Withdrawal) error {
 	db := p.pool
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
 
 	tx, err := db.Begin(ctx)
@@ -283,7 +279,7 @@ func (p *PostgresDB) AccrualWithdraw(c *models.Config, w models.Withdrawal) erro
 	_, err = tx.Exec(ctx, querySQL, w.Sum, w.UserID)
 	if err != nil {
 		if err := tx.Rollback(ctx); err != nil {
-			return fmt.Errorf("failed to rollback transaction: %w", err)
+			return fmt.Errorf(errRollback, err)
 		}
 		return fmt.Errorf("failed to withdraw accrual for user %s in Postgres DB: %w", w.UserID, err)
 	}
@@ -294,7 +290,7 @@ func (p *PostgresDB) AccrualWithdraw(c *models.Config, w models.Withdrawal) erro
 	_, err = tx.Exec(ctx, querySQL, w.UserID, w.Number, w.Sum, t)
 	if err != nil {
 		if err := tx.Rollback(ctx); err != nil {
-			return fmt.Errorf("failed to rollback transaction: %w", err)
+			return fmt.Errorf(errRollback, err)
 		}
 		return fmt.Errorf("failed to withdraw accrual for user %s in Postgres DB: %w", w.UserID, err)
 	}
@@ -307,7 +303,7 @@ func (p *PostgresDB) AccrualWithdraw(c *models.Config, w models.Withdrawal) erro
 func (p *PostgresDB) WithdrawalsGet(c *models.Config, uid string) (models.Withdrawals, error) {
 	db := p.pool
 	var w models.Withdrawals
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.ContextTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), c.ContextTimeout)
 	defer cancel()
 
 	query := "SELECT * FROM withdrawals WHERE userid=$1 ORDER BY processed_at ASC"

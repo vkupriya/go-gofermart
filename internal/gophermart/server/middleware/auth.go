@@ -22,7 +22,6 @@ func NewMiddlewareAuth(c *models.Config) *MiddlewareAuth {
 
 func (m *MiddlewareAuth) Auth(h http.Handler) http.Handler {
 	logFn := func(w http.ResponseWriter, r *http.Request) {
-		// logger := m.config.Logger
 		tokenStr := r.Header.Get("Authorization")
 
 		if tokenStr == "" {

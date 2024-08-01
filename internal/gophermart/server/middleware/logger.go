@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/vkupriya/go-gophermart/internal/gophermart/models"
+	"go.uber.org/zap"
 )
 
 type (
@@ -20,13 +20,13 @@ type (
 	}
 
 	MiddlewareLogger struct {
-		config *models.Config
+		logger *zap.Logger
 	}
 )
 
-func NewMiddlewareLogger(c *models.Config) *MiddlewareLogger {
+func NewMiddlewareLogger(zl *zap.Logger) *MiddlewareLogger {
 	return &MiddlewareLogger{
-		config: c,
+		logger: zl,
 	}
 }
 
@@ -46,7 +46,7 @@ func (r *loggingResponseWriter) WriteHeader(statusCode int) {
 
 func (m *MiddlewareLogger) Logging(h http.Handler) http.Handler {
 	logFn := func(w http.ResponseWriter, r *http.Request) {
-		logger := m.config.Logger
+		logger := m.logger
 
 		start := time.Now()
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/vkupriya/go-gophermart/internal/gophermart/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func CreateJWTString(c *models.Config, userid string) (string, error) {
@@ -43,4 +44,12 @@ func ValidateJWT(c *models.Config, tokenString string) (*models.Claims, error) {
 		return nil, errors.New("token is invalid")
 	}
 	return claims, nil
+}
+
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", errors.New("failed to hash password")
+	}
+	return string(bytes), nil
 }
