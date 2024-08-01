@@ -32,7 +32,7 @@ func NewConfig() (*models.Config, error) {
 	r := flag.String("r", defaultAccrualURL, "Accrual server address and port")
 	w := flag.Int64("w", defaultAccrualWorkers, "Number of Accrual processing workers")
 	d := flag.String("d", "", "PostgreSQL DSN")
-	j := flag.String("j", "", "JWT key")
+	j := flag.String("j", "secret-key", "JWT key")
 
 	flag.Parse()
 
@@ -83,6 +83,9 @@ func NewConfig() (*models.Config, error) {
 	if err != nil {
 		return &models.Config{}, fmt.Errorf("failed to initialize Logger: %w", err)
 	}
+	fmt.Println("Accrual Server: ", *r)
+	fmt.Println("DSN: ", *d)
+	fmt.Println("JWT: ", *j)
 
 	return &models.Config{
 		Address:               *a,
