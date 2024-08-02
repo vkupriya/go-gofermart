@@ -26,12 +26,12 @@ const (
 	errRollback string = "failed to rollback transaction: %w"
 )
 
-func NewPostgresDB(c *models.Config) (*PostgresDB, error) {
-	if err := runMigrations(c.PostgresDSN); err != nil {
+func NewPostgresDB(dsn string) (*PostgresDB, error) {
+	if err := runMigrations(dsn); err != nil {
 		return nil, fmt.Errorf("failed to run DB migrations: %w", err)
 	}
 
-	poolCfg, err := pgxpool.ParseConfig(c.PostgresDSN)
+	poolCfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse the DSN: %w", err)
 	}

@@ -39,7 +39,7 @@ func Start() (err error) {
 		logger.Sugar().Error("failed to gracefully shutdown the service")
 	})
 
-	s, err := storage.NewPostgresDB(cfg)
+	s, err := storage.NewPostgresDB(cfg.PostgresDSN)
 	if err != nil {
 		return fmt.Errorf("failed to initialize PostgresDB: %w", err)
 	}
