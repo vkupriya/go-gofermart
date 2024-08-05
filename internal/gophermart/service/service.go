@@ -237,7 +237,7 @@ func (g *GophermartService) getAccrualWorker(ctx context.Context, ch <-chan mode
 						}
 						retryAfter = time.Duration(retryAfterInt) * time.Second
 					} else {
-						retryAfter = g.config.AccrualRateLimitWait
+						retryAfter = g.config.AccrualRetryAfter
 					}
 					// setting RetryFlag to true
 					rf.Store(true)

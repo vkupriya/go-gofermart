@@ -13,13 +13,13 @@ import (
 func CreateJWTString(c *models.Config, userid string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, models.Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Second * time.Duration(c.JWTTokenTTL))),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(c.JWTTokenTTL)),
 		},
 		UserID: userid,
 	})
 
 	// создаём строку токена
-	tokenString, err := token.SignedString([]byte(c.KeyJWT))
+	tokenString, err := token.SignedString([]byte(c.JWTKey))
 	if err != nil {
 		return "", fmt.Errorf("failed to sign token: %w", err)
 	}
@@ -34,7 +34,7 @@ func ValidateJWT(c *models.Config, tokenString string) (*models.Claims, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-		return []byte(c.KeyJWT), nil
+		return []byte(c.JWTKey), nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse token: %w", err)

@@ -21,6 +21,7 @@ import (
 
 func Start() (err error) {
 	cfg, err := config.NewConfig()
+
 	if err != nil {
 		return fmt.Errorf("failed to initialize config: %w", err)
 	}
