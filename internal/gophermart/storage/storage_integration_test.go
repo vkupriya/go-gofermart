@@ -82,7 +82,7 @@ func runMain(m *testing.M) (int, error) {
 				"POSTGRES_USER=postgres",
 				"POSTGRES_PASSWORD=postgres",
 			},
-			//ExposedPorts: []string{"5432"},
+			ExposedPorts: []string{"5432/tcp"},
 		},
 		func(config *docker.HostConfig) {
 			config.AutoRemove = true

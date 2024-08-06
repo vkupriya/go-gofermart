@@ -11,12 +11,12 @@ type Config struct {
 	Logger                *zap.Logger
 	Address               string
 	PostgresDSN           string
-	KeyJWT                string
+	JWTKey                string
 	AccrualAddress        string
-	JWTTokenTTL           int64
+	JWTTokenTTL           time.Duration
 	ContextTimeout        time.Duration
 	AccrualHTTPTimeout    time.Duration
-	AccrualRateLimitWait  time.Duration
+	AccrualRetryAfter     time.Duration
 	AccrualInterval       time.Duration
 	AccrualWorkerRetry    time.Duration
 	AccrualWorkers        int64
