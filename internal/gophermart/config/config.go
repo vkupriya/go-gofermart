@@ -18,6 +18,7 @@ import (
 const (
 	defaultContextTimeout        time.Duration = 3 * time.Second
 	defaultJWTTokenTTL           time.Duration = 3600 * time.Second
+	defaultJWTKey                string        = "vcwYCYkum_2Fsukk"
 	defaultAddress               string        = "localhost:8080"
 	defaultAccrualURL            string        = "http://localhost:8082"
 	defaultAccrualHTTPTimeout    time.Duration = 10 * time.Second
@@ -66,7 +67,6 @@ func NewConfig() (*models.Config, error) {
 	r := flag.String("r", defaultAccrualURL, "Accrual server address and port")
 	w := flag.Int64("w", defaultAccrualWorkers, "Number of Accrual processing workers")
 	d := flag.String("d", "", "PostgreSQL DSN")
-	j := flag.String("j", "", "JWT key")
 
 	flag.Parse()
 
@@ -110,15 +110,14 @@ func NewConfig() (*models.Config, error) {
 		}
 	}
 
-	if *j == "" {
-		if envJWT, ok := os.LookupEnv("JWT"); ok {
-			j = &envJWT
+	var JWTKey string
+	if envJWT, ok := os.LookupEnv("JWT"); ok {
+		JWTKey = envJWT
+	} else {
+		if vJWTKey != "" {
+			JWTKey = vJWTKey
 		} else {
-			if vJWTKey != "" {
-				j = &vJWTKey
-			} else {
-				return &models.Config{}, errors.New("jwt secret key is missing")
-			}
+			JWTKey = defaultJWTKey
 		}
 	}
 
@@ -168,7 +167,7 @@ func NewConfig() (*models.Config, error) {
 		Logger:                logger,
 		PostgresDSN:           *d,
 		ContextTimeout:        defaultContextTimeout,
-		JWTKey:                *j,
+		JWTKey:                JWTKey,
 		JWTTokenTTL:           JWTTokenTTL,
 		AccrualAddress:        *r,
 		AccrualHTTPTimeout:    AccrualHTTPTimeout,
